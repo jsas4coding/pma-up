@@ -32,7 +32,7 @@ func TestExtractZip_Success(t *testing.T) {
 			t.Errorf("failed to read extracted file %s: %v", name, err)
 		}
 		if string(data) != content {
-			t.Errorf("content mismatch for %s", name)
+			t.Errorf("content mismatch for %s: expected %q, got %q", name, content, string(data))
 		}
 	}
 }
