@@ -32,9 +32,9 @@ func TestRunUpdate(t *testing.T) {
 	mockZipPath := filepath.Join(tempDir, "mock_update.zip")
 	files := map[string]string{
 		"phpMyAdmin-5.2.2-all-languages/file.txt":       "new version",
-		"phpMyAdmin-5.2.2-all-languages/config.inc.php": "should be replaced", // will be overwritten
+		"phpMyAdmin-5.2.2-all-languages/config.inc.php": "should be replaced",
 	}
-	if err := createTestZip(mockZipPath, files); err != nil {
+	if err := createTestZip(t, mockZipPath, files); err != nil {
 		t.Fatalf("failed to create test zip: %v", err)
 	}
 
@@ -96,21 +96,21 @@ func TestRunUpdate(t *testing.T) {
 }
 
 // createTestZip creates a zip archive for testing purposes.
-func createTestZip(zipPath string, files map[string]string) error {
+func createTestZip(t *testing.T, zipPath string, files map[string]string) error {
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if cerr := zipFile.Close(); cerr != nil {
-			// log warning if desired
+			t.Errorf("failed to close zipFile: %v", cerr)
 		}
 	}()
 
 	zipWriter := zip.NewWriter(zipFile)
 	defer func() {
 		if cerr := zipWriter.Close(); cerr != nil {
-			// log warning if desired
+			t.Errorf("failed to close zipWriter: %v", cerr)
 		}
 	}()
 

@@ -17,7 +17,7 @@ func TestExtractZip(t *testing.T) {
 		"folder2/file2.txt": "content2",
 	}
 
-	if err := createTestZip(zipPath, testFiles); err != nil {
+	if err := createTestZip(t, zipPath, testFiles); err != nil {
 		t.Fatalf("failed to create test zip: %v", err)
 	}
 
@@ -43,23 +43,21 @@ func TestExtractZip(t *testing.T) {
 }
 
 // createTestZip creates a zip file at the given path with provided files and contents.
-func createTestZip(zipPath string, files map[string]string) error {
+func createTestZip(t *testing.T, zipPath string, files map[string]string) error {
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if cerr := zipFile.Close(); cerr != nil {
-			// we log here because we are inside a test helper
-			// you can adjust if you prefer hard failure
-			// fmt.Printf("warning: failed to close zipFile: %v", cerr)
+			t.Errorf("failed to close zipFile: %v", cerr)
 		}
 	}()
 
 	zipWriter := zip.NewWriter(zipFile)
 	defer func() {
 		if cerr := zipWriter.Close(); cerr != nil {
-			// we log here because we are inside a test helper
+			t.Errorf("failed to close zipWriter: %v", cerr)
 		}
 	}()
 
