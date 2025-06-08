@@ -32,7 +32,7 @@ func TestExtractZip_Success(t *testing.T) {
 			t.Errorf("failed to read extracted file %s: %v", name, err)
 		}
 		if string(data) != content {
-			t.Errorf("content mismatch for %s: expected %q, got %q", name, content, string(data))
+			t.Errorf("content mismatch for %s", name)
 		}
 	}
 }
@@ -50,10 +50,11 @@ func TestExtractZip_FailureScenarios(t *testing.T) {
 
 	t.Run("corrupted zip file", func(t *testing.T) {
 		badZipPath := filepath.Join(tempDir, "bad.zip")
-		os.WriteFile(badZipPath, []byte("not a real zip content"), 0644)
+		if err := os.WriteFile(badZipPath, []byte("not a real zip content"), 0644); err != nil {
+			t.Fatalf("failed to write corrupted zip: %v", err)
+		}
 		extractDir := filepath.Join(tempDir, "extracted2")
-		err := ExtractZip(badZipPath, extractDir)
-		if err == nil {
+		if err := ExtractZip(badZipPath, extractDir); err == nil {
 			t.Errorf("expected error for corrupted zip")
 		}
 	})
@@ -69,7 +70,9 @@ func TestExtractZip_FailureScenarios(t *testing.T) {
 	t.Run("empty destination", func(t *testing.T) {
 		zipPath := filepath.Join(tempDir, "test.zip")
 		testFiles := map[string]string{"file.txt": "data"}
-		createTestZip(t, zipPath, testFiles)
+		if err := createTestZip(t, zipPath, testFiles); err != nil {
+			t.Fatalf("failed to create test zip: %v", err)
+		}
 		err := ExtractZip(zipPath, "")
 		if err == nil || !strings.Contains(err.Error(), "empty destination path") {
 			t.Errorf("expected empty destination path error")
@@ -79,24 +82,32 @@ func TestExtractZip_FailureScenarios(t *testing.T) {
 	t.Run("permission denied on destination", func(t *testing.T) {
 		zipPath := filepath.Join(tempDir, "test2.zip")
 		testFiles := map[string]string{"file.txt": "data"}
-		createTestZip(t, zipPath, testFiles)
+		if err := createTestZip(t, zipPath, testFiles); err != nil {
+			t.Fatalf("failed to create test zip: %v", err)
+		}
 
 		extractDir := filepath.Join(tempDir, "extracted3")
-		os.MkdirAll(extractDir, 0500)
-		defer os.Chmod(extractDir, 0700)
+		if err := os.MkdirAll(extractDir, 0500); err != nil {
+			t.Fatalf("failed to mkdir: %v", err)
+		}
+		defer func() {
+			if err := os.Chmod(extractDir, 0700); err != nil {
+				t.Errorf("failed to restore permissions: %v", err)
+			}
+		}()
 
-		err := ExtractZip(zipPath, extractDir)
-		if err == nil {
+		if err := ExtractZip(zipPath, extractDir); err == nil {
 			t.Errorf("expected permission error")
 		}
 	})
 
 	t.Run("invalid path traversal", func(t *testing.T) {
 		zipPath := filepath.Join(tempDir, "evil.zip")
-		createTestZip(t, zipPath, map[string]string{"../evil.txt": "attack"})
+		if err := createTestZip(t, zipPath, map[string]string{"../evil.txt": "attack"}); err != nil {
+			t.Fatalf("failed to create evil zip: %v", err)
+		}
 		extractDir := filepath.Join(tempDir, "extracted4")
-		err := ExtractZip(zipPath, extractDir)
-		if err == nil || !strings.Contains(err.Error(), "invalid file path detected") {
+		if err := ExtractZip(zipPath, extractDir); err == nil || !strings.Contains(err.Error(), "invalid file path detected") {
 			t.Errorf("expected invalid path detection")
 		}
 	})
@@ -107,18 +118,25 @@ func createTestZip(t *testing.T, zipPath string, files map[string]string) error 
 	if err != nil {
 		t.Fatalf("failed to create zip file: %v", err)
 	}
-	defer zipFile.Close()
+	defer func() {
+		if cerr := zipFile.Close(); cerr != nil {
+			t.Errorf("failed to close zip file: %v", cerr)
+		}
+	}()
 
 	zipWriter := zip.NewWriter(zipFile)
-	defer zipWriter.Close()
+	defer func() {
+		if cerr := zipWriter.Close(); cerr != nil {
+			t.Errorf("failed to close zip writer: %v", cerr)
+		}
+	}()
 
 	for name, content := range files {
 		writer, err := zipWriter.Create(name)
 		if err != nil {
 			t.Fatalf("failed to create entry in zip: %v", err)
 		}
-		_, err = writer.Write([]byte(content))
-		if err != nil {
+		if _, err := writer.Write([]byte(content)); err != nil {
 			t.Fatalf("failed to write zip content: %v", err)
 		}
 	}

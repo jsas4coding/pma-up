@@ -101,7 +101,9 @@ func TestDownloadPhpMyAdmin_ServerReturns500(t *testing.T) {
 func TestDownloadPhpMyAdmin_DirectoryNotWritable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/zip")
-		w.Write([]byte("PK\x03\x04 dummy zip content"))
+		if _, err := w.Write([]byte("PK\x03\x04 dummy zip content")); err != nil {
+			t.Fatalf("failed to write mock zip content: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -109,7 +111,11 @@ func TestDownloadPhpMyAdmin_DirectoryNotWritable(t *testing.T) {
 	if err := os.Chmod(tempDir, 0500); err != nil {
 		t.Fatalf("failed to chmod: %v", err)
 	}
-	defer os.Chmod(tempDir, 0700)
+	defer func() {
+		if err := os.Chmod(tempDir, 0700); err != nil {
+			t.Errorf("failed to restore permissions: %v", err)
+		}
+	}()
 
 	version := "5.2.2"
 	mockDownloadURL := fmt.Sprintf("%s/phpMyAdmin-%s-all-languages.zip", server.URL, version)
