@@ -111,7 +111,9 @@ func TestFetchLatestVersion_FailureScenarios(t *testing.T) {
 			if err != nil {
 				t.Fatalf("failed to hijack connection: %v", err)
 			}
-			conn.Close()
+			if cerr := conn.Close(); cerr != nil {
+				t.Errorf("failed to close hijacked connection: %v", cerr)
+			}
 		}))
 		defer server.Close()
 
