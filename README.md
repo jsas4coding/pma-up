@@ -145,7 +145,6 @@ You can explore the current detailed coverage report [here](https://codecov.io/g
 ### Reference
 
 - [Go coverage: known uncovered patterns](https://github.com/golang/go/issues/18835)
-- [The cost of 100% test coverage in Go](https://peter.bourgon.org/blog/2017/06/09/test-coverage.html)
 
 ---
 
