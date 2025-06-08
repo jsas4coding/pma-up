@@ -1,5 +1,11 @@
 # phpMyAdmin Updater (pma-up)
 
+![CI](https://github.com/jsas4coding/pma-up/actions/workflows/release.yml/badge.svg)
+![Go Version](https://img.shields.io/badge/go-1.24.4-blue)
+![License](https://img.shields.io/github/license/jsas4coding/pma-up)
+![GitHub release (latest by tag)](https://img.shields.io/github/v/release/jsas4coding/pma-up)
+[![Coverage Status](https://coveralls.io/repos/github/jsas4coding/pma-up/badge.svg?branch=main)](https://coveralls.io/github/jsas4coding/pma-up?branch=main)
+
 **phpMyAdmin Updater — CLI tool for fully automated phpMyAdmin updates**
 
 This project automates the full update process of a phpMyAdmin installation, downloading the latest release, safely replacing the current installation, preserving configuration files, and creating backups.
