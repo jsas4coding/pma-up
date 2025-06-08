@@ -1,0 +1,30 @@
+[ignore]
+# Optional: exclude testdata or vendor
+# paths = ["vendor", "testdata"]
+
+# Set output style
+[output]
+format = "friendly"
+
+# Define severity levels
+[severity]
+error = ["unused-parameter", "exported", "var-naming"]
+warning = ["line-length"]
+
+# Enable and configure desired rules
+[rules]
+
+# Enforces comments on exported types/functions/consts
+[rules.exported]
+arguments = ["comment should start with the name of the object"]
+
+# Warn if function parameters are unused
+[rules.unused-parameter]
+
+# Warn if variable names are too short (1-letter vars not allowed)
+[rules.var-naming]
+arguments = ["min-length=2"]
+
+# Warn for long lines
+[rules.line-length]
+arguments = ["max-len=120"]
