@@ -25,6 +25,7 @@ checksum:
   algorithm: sha256
 
 release:
+  name_template: "phpMyAdmin Updater {{ .Tag }}"
   github:
     owner: jsas4coding
     name: pma-up
