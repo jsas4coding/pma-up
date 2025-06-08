@@ -75,7 +75,7 @@ func TestFetchLatestVersion_FailureScenarios(t *testing.T) {
 	})
 
 	t.Run("invalid response format - empty body", func(t *testing.T) {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		server := httptest.NewServer(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			// empty body
 		}))
 		defer server.Close()

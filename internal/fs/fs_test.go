@@ -1,9 +1,9 @@
 package fs
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"syscall"
 	"testing"
 )
 
@@ -111,10 +111,9 @@ func TestMoveDir_FallbackCrossDevice(t *testing.T) {
 	// replace os.Rename temporarily to simulate EXDEV
 	originalRename := renameFunc
 	defer func() { renameFunc = originalRename }()
-	renameFunc = func(oldpath, newpath string) error {
-		return &os.LinkError{Err: syscall.EXDEV}
+	renameFunc = func(_, _ string) error {
+		return fmt.Errorf("simulated rename error")
 	}
-
 	if err := MoveDir(sourceDir, destDir); err != nil {
 		t.Fatalf("MoveDir fallback failed: %v", err)
 	}
