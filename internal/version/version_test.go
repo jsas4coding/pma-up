@@ -99,31 +99,4 @@ func TestFetchLatestVersion_FailureScenarios(t *testing.T) {
 			t.Errorf("expected HTTP request creation error, got %v", err)
 		}
 	})
-
-	// t.Run("scanner failure triggers scanner.Err()", func(t *testing.T) {
-	// 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-	// 		// Simulate incomplete write and close connection to cause scanner error
-	// 		hj, ok := w.(http.Hijacker)
-	// 		if !ok {
-	// 			t.Fatalf("server does not support hijacking")
-	// 		}
-	// 		conn, _, err := hj.Hijack()
-	// 		if err != nil {
-	// 			t.Fatalf("failed to hijack connection: %v", err)
-	// 		}
-	// 		if cerr := conn.Close(); cerr != nil {
-	// 			t.Errorf("failed to close hijacked connection: %v", cerr)
-	// 		}
-	// 	}))
-	// 	defer server.Close()
-	//
-	// 	originalURL := VersionURL
-	// 	VersionURL = server.URL
-	// 	defer func() { VersionURL = originalURL }()
-	//
-	// 	_, err := FetchLatestVersion()
-	// 	if err == nil || !strings.Contains(err.Error(), "failed to scan response body") {
-	// 		t.Errorf("expected scanner failure, got %v", err)
-	// 	}
-	// })
 }

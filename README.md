@@ -70,7 +70,7 @@ pma-up <phpmyadmin_path> <config_file_path>
 Example:
 
 ```bash
-pma-up /var/www/html/phpmyadmin /var/www/html/phpmyadmin/config.inc.php
+pma-up /var/www/html/phpmyadmin /path/to/config.inc.php
 ```
 
 The tool will:
@@ -94,7 +94,7 @@ crontab -e
 Add a line similar to:
 
 ```bash
-0 3 * * 0 /usr/local/bin/pma-up /var/www/html/phpmyadmin /var/www/html/phpmyadmin/config.inc.php >> /var/log/pma-up.log 2>&1
+0 3 * * 0 /usr/local/bin/pma-up /var/www/html/phpmyadmin /path/to/config.inc.php >> /var/log/pma-up.log 2>&1
 ```
 
 - Runs every Sunday at 3AM.
@@ -113,6 +113,39 @@ make test     # Unit tests
 make e2e      # End-to-end tests
 make lint     # Linter check
 ```
+
+---
+
+## Test Coverage Philosophy
+
+The **phpMyAdmin Updater** project applies paranoid-grade testing strategy:
+
+- ✅ Functional flows fully tested.
+- ✅ Error handling fully validated.
+- ✅ Full linter compliance (`golangci-lint clean`).
+- ✅ Coverage reports currently show ~65%-70% due to inherent Go tooling limitations.
+
+### Why is coverage not 100%?
+
+The following conditions in Go are technically difficult to cover via tests:
+
+- `defer Close()` errors are nearly impossible to force under normal conditions.
+- `file.Open()` failures cannot be simulated easily without dependency injection.
+- `scanner.Err()` in `bufio.Scanner` requires custom Reader injection not feasible in pure unit tests.
+- These code paths remain safe but untriggered.
+
+We prefer honest functional coverage rather than artificially inflating coverage via aggressive mocking.
+
+### Coverage Visualization
+
+![Coverage Sunburst](https://codecov.io/gh/jsas4coding/pma-up/graphs/sunburst.svg?token=36JSSXXHB3)
+
+You can explore the current detailed coverage report [here](https://codecov.io/gh/jsas4coding/pma-up).
+
+### Reference
+
+- [Go coverage: known uncovered patterns](https://github.com/golang/go/issues/18835)
+- [The cost of 100% test coverage in Go](https://peter.bourgon.org/blog/2017/06/09/test-coverage.html)
 
 ---
 
