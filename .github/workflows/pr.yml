@@ -19,9 +19,9 @@ jobs:
       - name: Install golangci-lint 2.1.6
         run: |
           curl -sSfL https://github.com/golangci/golangci-lint/releases/download/v2.1.6/golangci-lint-2.1.6-linux-amd64.tar.gz -o linter.tar.gz
-          mkdir -p tmp-linter
-          tar -xzf linter.tar.gz -C tmp-linter
-          sudo mv tmp-linter/golangci-lint-2.1.6-linux-amd64/golangci-lint /usr/local/bin/
+          TMP_DIR=$(mktemp -d)
+          tar -xzf linter.tar.gz -C $TMP_DIR
+          sudo mv $TMP_DIR/golangci-lint-2.1.6-linux-amd64/golangci-lint /usr/local/bin/
 
       - name: Run Linter
         run: make lint
@@ -32,3 +32,10 @@ jobs:
       - name: Run E2E Tests
         run: make e2e
 
+      - name: Check git clean state
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Repository is not clean:"
+            git status
+            exit 1
+          fi
