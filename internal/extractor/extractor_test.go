@@ -10,30 +10,30 @@ import (
 func TestExtractZip(t *testing.T) {
 	tempDir := t.TempDir()
 
-	// Create a test zip file with sample files
+	// Create test zip file
 	zipPath := filepath.Join(tempDir, "test.zip")
 	testFiles := map[string]string{
 		"folder1/file1.txt": "content1",
 		"folder2/file2.txt": "content2",
 	}
 
-	if err := createTestZip(t, zipPath, testFiles); err != nil {
-		t.Fatalf("failed to create test zip: %v", err)
+	createErr := createTestZip(t, zipPath, testFiles)
+	if createErr != nil {
+		t.Fatalf("failed to create test zip: %v", createErr)
 	}
 
 	extractDir := filepath.Join(tempDir, "extracted")
 
-	// Execute extraction
-	if err := ExtractZip(zipPath, extractDir); err != nil {
-		t.Fatalf("ExtractZip failed: %v", err)
+	extractErr := ExtractZip(zipPath, extractDir)
+	if extractErr != nil {
+		t.Fatalf("ExtractZip failed: %v", extractErr)
 	}
 
-	// Validate that extracted files match expected contents
 	for name, content := range testFiles {
 		extractedPath := filepath.Join(extractDir, name)
-		data, err := os.ReadFile(extractedPath)
-		if err != nil {
-			t.Errorf("failed to read extracted file %s: %v", name, err)
+		data, readErr := os.ReadFile(extractedPath)
+		if readErr != nil {
+			t.Errorf("failed to read extracted file %s: %v", name, readErr)
 			continue
 		}
 		if string(data) != content {
@@ -42,7 +42,35 @@ func TestExtractZip(t *testing.T) {
 	}
 }
 
-// createTestZip creates a zip file at the given path with provided files and contents.
+func TestExtractZip_FailureScenarios(t *testing.T) {
+	tempDir := t.TempDir()
+
+	t.Run("file not found", func(t *testing.T) {
+		invalidPath := filepath.Join(tempDir, "nonexistent.zip")
+		extractDir := filepath.Join(tempDir, "extracted1")
+
+		err := ExtractZip(invalidPath, extractDir)
+		if err == nil {
+			t.Errorf("expected error when opening nonexistent file, got nil")
+		}
+	})
+
+	t.Run("corrupted zip file", func(t *testing.T) {
+		badZipPath := filepath.Join(tempDir, "bad.zip")
+		writeErr := os.WriteFile(badZipPath, []byte("not a real zip content"), 0644)
+		if writeErr != nil {
+			t.Fatalf("failed to write corrupted zip: %v", writeErr)
+		}
+
+		extractDir := filepath.Join(tempDir, "extracted2")
+		err := ExtractZip(badZipPath, extractDir)
+		if err == nil {
+			t.Errorf("expected error when extracting corrupted zip, got nil")
+		}
+	})
+}
+
+// Hardening helper - fully linter safe
 func createTestZip(t *testing.T, zipPath string, files map[string]string) error {
 	zipFile, err := os.Create(zipPath)
 	if err != nil {
@@ -66,7 +94,7 @@ func createTestZip(t *testing.T, zipPath string, files map[string]string) error 
 		if err != nil {
 			return err
 		}
-		if _, err = writer.Write([]byte(content)); err != nil {
+		if _, err := writer.Write([]byte(content)); err != nil {
 			return err
 		}
 	}

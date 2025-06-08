@@ -1,12 +1,15 @@
 package fs
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
-func TestCopyFile(t *testing.T) {
+var renameFunc = os.Rename
+
+func TestCopyFile_Success(t *testing.T) {
 	tempDir := t.TempDir()
 
 	srcFile := filepath.Join(tempDir, "source.txt")
@@ -14,20 +17,17 @@ func TestCopyFile(t *testing.T) {
 
 	content := []byte("test file content")
 
-	// Create source file
 	if err := os.WriteFile(srcFile, content, 0644); err != nil {
 		t.Fatalf("failed to write source file: %v", err)
 	}
 
-	// Perform copy operation
 	if err := CopyFile(srcFile, dstFile); err != nil {
 		t.Fatalf("CopyFile failed: %v", err)
 	}
 
-	// Verify destination file content
 	read, err := os.ReadFile(dstFile)
 	if err != nil {
-		t.Fatalf("failed to read destination file: %v", err)
+		t.Fatalf("failed to read dest file: %v", err)
 	}
 
 	if string(read) != string(content) {
@@ -35,15 +35,36 @@ func TestCopyFile(t *testing.T) {
 	}
 }
 
-func TestMoveDir(t *testing.T) {
+func TestCopyFile_FailureScenarios(t *testing.T) {
+	tempDir := t.TempDir()
+
+	t.Run("source does not exist", func(t *testing.T) {
+		err := CopyFile(filepath.Join(tempDir, "no-source.txt"), filepath.Join(tempDir, "dest.txt"))
+		if err == nil {
+			t.Errorf("expected error for missing source file, got nil")
+		}
+	})
+
+	t.Run("source is not regular file", func(t *testing.T) {
+		dirPath := filepath.Join(tempDir, "some-dir")
+		if err := os.Mkdir(dirPath, 0755); err != nil {
+			t.Fatalf("failed to create dir: %v", err)
+		}
+		err := CopyFile(dirPath, filepath.Join(tempDir, "dest.txt"))
+		if err == nil {
+			t.Errorf("expected error for non-regular source file, got nil")
+		}
+	})
+}
+
+func TestMoveDir_Success(t *testing.T) {
 	tempDir := t.TempDir()
 
 	sourceDir := filepath.Join(tempDir, "source")
 	destDir := filepath.Join(tempDir, "dest")
 
-	// Create source directory
 	if err := os.MkdirAll(sourceDir, 0755); err != nil {
-		t.Fatalf("failed to create source directory: %v", err)
+		t.Fatalf("failed to create source dir: %v", err)
 	}
 
 	testFile := filepath.Join(sourceDir, "test.txt")
@@ -51,17 +72,14 @@ func TestMoveDir(t *testing.T) {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 
-	// Perform move operation
 	if err := MoveDir(sourceDir, destDir); err != nil {
 		t.Fatalf("MoveDir failed: %v", err)
 	}
 
-	// Verify source directory was removed
 	if _, err := os.Stat(sourceDir); !os.IsNotExist(err) {
-		t.Errorf("source directory still exists after move")
+		t.Errorf("source dir still exists after move")
 	}
 
-	// Verify file was moved correctly
 	read, err := os.ReadFile(filepath.Join(destDir, "test.txt"))
 	if err != nil {
 		t.Fatalf("failed to read moved file: %v", err)
@@ -69,5 +87,38 @@ func TestMoveDir(t *testing.T) {
 
 	if string(read) != "move test" {
 		t.Errorf("content mismatch: expected 'move test', got %q", string(read))
+	}
+}
+
+// simulate copyDir failure by mocking filepath.Walk (advanced scenario - optional in real pipelines)
+
+func TestMoveDir_FallbackCrossDevice(t *testing.T) {
+	// here we simulate EXDEV manually to trigger the fallback
+	tempDir := t.TempDir()
+
+	sourceDir := filepath.Join(tempDir, "source")
+	destDir := filepath.Join(tempDir, "dest")
+
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatalf("failed to create source dir: %v", err)
+	}
+
+	testFile := filepath.Join(sourceDir, "test.txt")
+	if err := os.WriteFile(testFile, []byte("move test"), 0644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	// replace os.Rename temporarily to simulate EXDEV
+	originalRename := renameFunc
+	defer func() { renameFunc = originalRename }()
+	renameFunc = func(_, _ string) error {
+		return fmt.Errorf("simulated rename error")
+	}
+	if err := MoveDir(sourceDir, destDir); err != nil {
+		t.Fatalf("MoveDir fallback failed: %v", err)
+	}
+
+	if _, err := os.Stat(sourceDir); !os.IsNotExist(err) {
+		t.Errorf("source dir still exists after fallback move")
 	}
 }
