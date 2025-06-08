@@ -16,19 +16,36 @@ import (
 	"syscall"
 )
 
+// Injected functions for deterministic fault injection
+type injFunc struct {
+	Rename    func(string, string) error
+	RemoveAll func(string) error
+	MkdirAll  func(string, os.FileMode) error
+	Open      func(string) (*os.File, error)
+	OpenFile  func(string, int, os.FileMode) (*os.File, error)
+	Copy      func(io.Writer, io.Reader) (int64, error)
+	Rel       func(string, string) (string, error)
+	Walk      func(string, filepath.WalkFunc) error
+	Stat      func(string) (os.FileInfo, error)
+}
+
+var inj = injFunc{
+	Rename:    os.Rename,
+	RemoveAll: os.RemoveAll,
+	MkdirAll:  os.MkdirAll,
+	Open:      os.Open,
+	OpenFile:  os.OpenFile,
+	Copy:      io.Copy,
+	Rel:       filepath.Rel,
+	Walk:      filepath.Walk,
+}
+
 // MoveDir moves a directory from source to destination.
 //
 // If the source and destination are on different devices, MoveDir transparently falls back
 // to a recursive copy followed by removal of the source directory.
-//
-// Parameters:
-//   - source: full path of the source directory to move.
-//   - dest: full path of the destination directory.
-//
-// Returns:
-//   - error: non-nil if the move or copy operation fails.
 func MoveDir(source, dest string) error {
-	err := os.Rename(source, dest)
+	err := inj.Rename(source, dest)
 	if err == nil {
 		return nil
 	}
@@ -42,7 +59,7 @@ func MoveDir(source, dest string) error {
 		return wrap("copyDir failed", err)
 	}
 
-	if err := os.RemoveAll(source); err != nil {
+	if err := inj.RemoveAll(source); err != nil {
 		return wrap("failed to cleanup source after copy", err)
 	}
 
@@ -50,16 +67,6 @@ func MoveDir(source, dest string) error {
 }
 
 // CopyFile copies a single file from src to dst.
-//
-// It fully preserves the file contents and permissions. Errors are returned
-// if any part of the copy operation fails.
-//
-// Parameters:
-//   - src: full path to the source file.
-//   - dst: full path to the destination file.
-//
-// Returns:
-//   - error: non-nil if the copy operation fails.
 func CopyFile(src, dst string) error {
 	sourceFileStat, err := os.Stat(src)
 	if err != nil {
@@ -70,27 +77,19 @@ func CopyFile(src, dst string) error {
 		return wrap("source file is not regular", nil)
 	}
 
-	source, err := os.Open(src)
+	source, err := inj.Open(src)
 	if err != nil {
 		return wrap("failed to open source file", err)
 	}
-	defer func() {
-		if closeErr := source.Close(); closeErr != nil {
-			log.Printf("warning: failed to close source file: %v", closeErr)
-		}
-	}()
+	defer safeClose("source", source)
 
-	destination, err := os.Create(dst)
+	destination, err := inj.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, sourceFileStat.Mode())
 	if err != nil {
 		return wrap("failed to create destination file", err)
 	}
-	defer func() {
-		if closeErr := destination.Close(); closeErr != nil {
-			log.Printf("warning: failed to close destination file: %v", closeErr)
-		}
-	}()
+	defer safeClose("destination", destination)
 
-	_, err = io.Copy(destination, source)
+	_, err = inj.Copy(destination, source)
 	if err != nil {
 		return wrap("failed to copy file content", err)
 	}
@@ -99,44 +98,42 @@ func CopyFile(src, dst string) error {
 }
 
 func copyDir(source, dest string) error {
-	return filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
+	return inj.Walk(source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		relPath, err := filepath.Rel(source, path)
+		relPath, err := inj.Rel(source, path)
 		if err != nil {
 			return err
 		}
 		targetPath := filepath.Join(dest, relPath)
 
 		if info.IsDir() {
-			return os.MkdirAll(targetPath, info.Mode())
+			return inj.MkdirAll(targetPath, info.Mode())
 		}
 
-		srcFile, err := os.Open(path)
+		srcFile, err := inj.Open(path)
 		if err != nil {
 			return err
 		}
-		defer func() {
-			if closeErr := srcFile.Close(); closeErr != nil {
-				log.Printf("warning: failed to close source file: %v", closeErr)
-			}
-		}()
+		defer safeClose("source file", srcFile)
 
-		destFile, err := os.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
+		destFile, err := inj.OpenFile(targetPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
 		if err != nil {
 			return err
 		}
-		defer func() {
-			if closeErr := destFile.Close(); closeErr != nil {
-				log.Printf("warning: failed to close destination file: %v", closeErr)
-			}
-		}()
+		defer safeClose("dest file", destFile)
 
-		_, err = io.Copy(destFile, srcFile)
+		_, err = inj.Copy(destFile, srcFile)
 		return err
 	})
+}
+
+func safeClose(label string, c io.Closer) {
+	if err := c.Close(); err != nil {
+		log.Printf("warning: failed to close %s: %v", label, err)
+	}
 }
 
 func wrap(msg string, err error) error {

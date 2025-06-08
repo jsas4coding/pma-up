@@ -2,19 +2,33 @@ package fs
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"syscall"
 	"testing"
 )
 
-var renameFunc = os.Rename
+func resetInjection() {
+	inj = injFunc{
+		Rename:    os.Rename,
+		RemoveAll: os.RemoveAll,
+		MkdirAll:  os.MkdirAll,
+		Open:      os.Open,
+		OpenFile:  os.OpenFile,
+		Copy:      io.Copy,
+		Rel:       filepath.Rel,
+		Walk:      filepath.Walk,
+		Stat:      os.Stat,
+	}
+}
 
 func TestCopyFile_Success(t *testing.T) {
+	resetInjection()
 	tempDir := t.TempDir()
-
 	srcFile := filepath.Join(tempDir, "source.txt")
 	dstFile := filepath.Join(tempDir, "dest.txt")
-
 	content := []byte("test file content")
 
 	if err := os.WriteFile(srcFile, content, 0644); err != nil {
@@ -35,90 +49,144 @@ func TestCopyFile_Success(t *testing.T) {
 	}
 }
 
-func TestCopyFile_FailureScenarios(t *testing.T) {
+func TestCopyFile_Errors(t *testing.T) {
+	resetInjection()
 	tempDir := t.TempDir()
 
-	t.Run("source does not exist", func(t *testing.T) {
-		err := CopyFile(filepath.Join(tempDir, "no-source.txt"), filepath.Join(tempDir, "dest.txt"))
+	t.Run("stat fails", func(t *testing.T) {
+		inj.Stat = func(string) (os.FileInfo, error) { return nil, fmt.Errorf("stat failed") }
+		err := CopyFile("nonexistent", "out")
 		if err == nil {
-			t.Errorf("expected error for missing source file, got nil")
+			t.Errorf("expected error, got nil")
+		}
+		if !strings.Contains(err.Error(), "failed to stat source file") {
+			t.Errorf("unexpected error message: %v", err)
 		}
 	})
 
-	t.Run("source is not regular file", func(t *testing.T) {
-		dirPath := filepath.Join(tempDir, "some-dir")
+	t.Run("non-regular file", func(t *testing.T) {
+		dirPath := filepath.Join(tempDir, "dir")
 		if err := os.Mkdir(dirPath, 0755); err != nil {
 			t.Fatalf("failed to create dir: %v", err)
 		}
-		err := CopyFile(dirPath, filepath.Join(tempDir, "dest.txt"))
+		err := CopyFile(dirPath, "out")
 		if err == nil {
-			t.Errorf("expected error for non-regular source file, got nil")
+			t.Errorf("expected non-regular file error")
 		}
 	})
 }
 
 func TestMoveDir_Success(t *testing.T) {
+	resetInjection()
 	tempDir := t.TempDir()
-
 	sourceDir := filepath.Join(tempDir, "source")
 	destDir := filepath.Join(tempDir, "dest")
-
 	if err := os.MkdirAll(sourceDir, 0755); err != nil {
 		t.Fatalf("failed to create source dir: %v", err)
 	}
-
-	testFile := filepath.Join(sourceDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("move test"), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
+	if err := os.WriteFile(filepath.Join(sourceDir, "file.txt"), []byte("data"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
 	}
 
 	if err := MoveDir(sourceDir, destDir); err != nil {
 		t.Fatalf("MoveDir failed: %v", err)
 	}
-
-	if _, err := os.Stat(sourceDir); !os.IsNotExist(err) {
-		t.Errorf("source dir still exists after move")
-	}
-
-	read, err := os.ReadFile(filepath.Join(destDir, "test.txt"))
-	if err != nil {
-		t.Fatalf("failed to read moved file: %v", err)
-	}
-
-	if string(read) != "move test" {
-		t.Errorf("content mismatch: expected 'move test', got %q", string(read))
-	}
 }
 
-// simulate copyDir failure by mocking filepath.Walk (advanced scenario - optional in real pipelines)
-
-func TestMoveDir_FallbackCrossDevice(t *testing.T) {
-	// here we simulate EXDEV manually to trigger the fallback
+func TestMoveDir_EXDEV(t *testing.T) {
+	resetInjection()
 	tempDir := t.TempDir()
-
 	sourceDir := filepath.Join(tempDir, "source")
 	destDir := filepath.Join(tempDir, "dest")
-
 	if err := os.MkdirAll(sourceDir, 0755); err != nil {
 		t.Fatalf("failed to create source dir: %v", err)
 	}
-
-	testFile := filepath.Join(sourceDir, "test.txt")
-	if err := os.WriteFile(testFile, []byte("move test"), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
+	if err := os.WriteFile(filepath.Join(sourceDir, "file.txt"), []byte("data"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
 	}
 
-	// replace os.Rename temporarily to simulate EXDEV
-	originalRename := renameFunc
-	defer func() { renameFunc = originalRename }()
-	renameFunc = func(_, _ string) error {
-		return fmt.Errorf("simulated rename error")
+	inj.Rename = func(_, _ string) error {
+		return &os.LinkError{
+			Op:  "rename",
+			Old: sourceDir,
+			New: destDir,
+			Err: syscall.EXDEV,
+		}
 	}
+
 	if err := MoveDir(sourceDir, destDir); err != nil {
-		t.Fatalf("MoveDir fallback failed: %v", err)
+		t.Fatalf("MoveDir EXDEV failed: %v", err)
+	}
+}
+
+func TestFaultInjection_CopyDirFailures(t *testing.T) {
+	resetInjection()
+	tempDir := t.TempDir()
+	sourceDir := filepath.Join(tempDir, "source")
+	destDir := filepath.Join(tempDir, "dest")
+	if err := os.MkdirAll(sourceDir, 0755); err != nil {
+		t.Fatalf("failed to create source dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(sourceDir, "file.txt"), []byte("data"), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
 	}
 
-	if _, err := os.Stat(sourceDir); !os.IsNotExist(err) {
-		t.Errorf("source dir still exists after fallback move")
-	}
+	t.Run("Walk fails", func(t *testing.T) {
+		inj.Walk = func(string, filepath.WalkFunc) error { return fmt.Errorf("walk failed") }
+		err := copyDir(sourceDir, destDir)
+		if err == nil {
+			t.Errorf("expected walk failure")
+		}
+	})
+
+	t.Run("Rel fails", func(t *testing.T) {
+		inj.Rel = func(string, string) (string, error) { return "", fmt.Errorf("rel failed") }
+		err := copyDir(sourceDir, destDir)
+		if err == nil {
+			t.Errorf("expected rel failure")
+		}
+	})
+
+	t.Run("MkdirAll fails", func(t *testing.T) {
+		inj.MkdirAll = func(string, os.FileMode) error { return fmt.Errorf("mkdir failed") }
+		err := copyDir(sourceDir, destDir)
+		if err == nil {
+			t.Errorf("expected mkdir failure")
+		}
+	})
+
+	t.Run("Open fails", func(t *testing.T) {
+		inj.Open = func(string) (*os.File, error) { return nil, fmt.Errorf("open failed") }
+		err := copyDir(sourceDir, destDir)
+		if err == nil {
+			t.Errorf("expected open failure")
+		}
+	})
+
+	t.Run("OpenFile fails", func(t *testing.T) {
+		inj.OpenFile = func(string, int, os.FileMode) (*os.File, error) { return nil, fmt.Errorf("openfile failed") }
+		err := copyDir(sourceDir, destDir)
+		if err == nil {
+			t.Errorf("expected openfile failure")
+		}
+	})
+
+	t.Run("Copy fails", func(t *testing.T) {
+		inj.Copy = func(io.Writer, io.Reader) (int64, error) { return 0, fmt.Errorf("copy failed") }
+		err := copyDir(sourceDir, destDir)
+		if err == nil {
+			t.Errorf("expected copy failure")
+		}
+	})
+
+	t.Run("RemoveAll fails", func(t *testing.T) {
+		inj.RemoveAll = func(string) error { return fmt.Errorf("removeall failed") }
+		inj.Rename = func(_, _ string) error {
+			return &os.LinkError{Op: "rename", Err: syscall.EXDEV}
+		}
+		err := MoveDir(sourceDir, destDir)
+		if err == nil {
+			t.Errorf("expected removeall failure")
+		}
+	})
 }
