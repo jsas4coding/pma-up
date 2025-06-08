@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
 func TestFetchLatestVersion(t *testing.T) {
 	mockContent := "5.2.2\n2025-01-21\nhttps://files.phpmyadmin.net/phpMyAdmin/5.2.2/phpMyAdmin-5.2.2-all-languages.zip\n"
 
-	// Setup mock server to simulate version.txt endpoint
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		if _, err := fmt.Fprint(w, mockContent); err != nil {
 			t.Fatalf("failed to write mockContent: %v", err)
@@ -18,7 +18,6 @@ func TestFetchLatestVersion(t *testing.T) {
 	}))
 	defer server.Close()
 
-	// Backup and override VersionURL for test
 	originalVersionURL := VersionURL
 	VersionURL = server.URL
 	defer func() { VersionURL = originalVersionURL }()
@@ -87,6 +86,42 @@ func TestFetchLatestVersion_FailureScenarios(t *testing.T) {
 		_, err := FetchLatestVersion()
 		if err == nil {
 			t.Errorf("expected error for empty response, got nil")
+		}
+	})
+
+	t.Run("invalid URL syntax triggers NewRequest failure", func(t *testing.T) {
+		originalURL := VersionURL
+		VersionURL = ":/invalid-url"
+		defer func() { VersionURL = originalURL }()
+
+		_, err := FetchLatestVersion()
+		if err == nil || !strings.Contains(err.Error(), "failed to create HTTP request") {
+			t.Errorf("expected HTTP request creation error, got %v", err)
+		}
+	})
+
+	t.Run("scanner failure triggers scanner.Err()", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			// Simulate incomplete write and close connection to cause scanner error
+			hj, ok := w.(http.Hijacker)
+			if !ok {
+				t.Fatalf("server does not support hijacking")
+			}
+			conn, _, err := hj.Hijack()
+			if err != nil {
+				t.Fatalf("failed to hijack connection: %v", err)
+			}
+			conn.Close()
+		}))
+		defer server.Close()
+
+		originalURL := VersionURL
+		VersionURL = server.URL
+		defer func() { VersionURL = originalURL }()
+
+		_, err := FetchLatestVersion()
+		if err == nil || !strings.Contains(err.Error(), "failed to scan response body") {
+			t.Errorf("expected scanner failure, got %v", err)
 		}
 	})
 }
