@@ -2,9 +2,9 @@
 
 ![CI](https://github.com/jsas4coding/pma-up/actions/workflows/release.yml/badge.svg)
 ![Go Version](https://img.shields.io/badge/go-1.24.4-blue)
-![License](https://img.shields.io/github/license/jsas4coding/pma-up)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 ![GitHub release (latest by tag)](https://img.shields.io/github/v/release/jsas4coding/pma-up)
-[![Coverage Status](https://coveralls.io/repos/github/jsas4coding/pma-up/badge.svg?branch=main)](https://coveralls.io/github/jsas4coding/pma-up?branch=main)
+[![codecov](https://codecov.io/gh/jsas4coding/pma-up/branch/main/graph/badge.svg?token=36JSSXXHB3)](https://codecov.io/gh/jsas4coding/pma-up)
 
 **phpMyAdmin Updater — CLI tool for fully automated phpMyAdmin updates**
 
@@ -118,6 +118,10 @@ make lint     # Linter check
 
 ## License
 
-This project is licensed but not actively maintained as an open community project.
+This project is licensed under the MIT License.
 
-Use at your own discretion.
+It is provided "as is", without warranty of any kind.
+
+The repository is public, but not actively maintained as a community-driven project.
+
+Use at your own risk and discretion.
